@@ -1,4 +1,5 @@
 import pytest
+
 from web_search_sdk.scrapers.duckduckgo_web import _parse_html
 
 HTML_FIXTURE = """
@@ -18,4 +19,4 @@ HTML_FIXTURE = """
 @pytest.mark.parametrize("top_n,expected", [(5, {"openai", "stock"})])
 def test_parse_html_tokens(top_n, expected):
     tokens = _parse_html(HTML_FIXTURE, top_n=top_n)
-    assert expected.issubset(set(tokens)), f"Expected tokens {expected} in {tokens}" 
+    assert expected.issubset(set(tokens)), f"Expected tokens {expected} in {tokens}"

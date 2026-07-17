@@ -1,7 +1,6 @@
-import os
-import pytest
-import asyncio
 from contextlib import asynccontextmanager
+
+import pytest
 
 from web_search_sdk.utils import http as http_utils
 
@@ -53,4 +52,4 @@ async def test_fetch_text_emits_telemetry(monkeypatch):
         assert key in evt
     assert evt["url"] == "http://example.com"
     assert evt["status"] == 200
-    assert evt["content_len"] == len("ok") 
+    assert evt["content_len"] == len("ok")

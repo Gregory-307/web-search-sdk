@@ -1,10 +1,12 @@
 import pytest
-from web_search_sdk.scrapers.base import ScraperContext
+
 from web_search_sdk.scrapers import paywall as pw
+from web_search_sdk.scrapers.base import ScraperContext
 
 HTML_EXAMPLE = """
 <html><body><article><p>Example headline</p><p>Full article body here.</p></article></body></html>
 """
+
 
 @pytest.mark.asyncio
 async def test_paywall_fetch(monkeypatch):
@@ -19,4 +21,4 @@ async def test_paywall_fetch(monkeypatch):
 
     ctx = ScraperContext(use_browser=False)
     text = await pw.fetch_bloomberg("http://example.com/article", ctx)
-    assert "Example headline" in text and "Full article body" in text 
+    assert "Example headline" in text and "Full article body" in text

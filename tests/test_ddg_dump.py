@@ -1,8 +1,4 @@
-import os
-import types
-from pathlib import Path
 import pytest
-from contextlib import asynccontextmanager
 
 from web_search_sdk.scrapers import duckduckgo_web as ddg
 from web_search_sdk.scrapers.base import ScraperContext
@@ -29,4 +25,4 @@ async def test_ddg_debug_dump(monkeypatch, tmp_path):
 
     expected = tmp_path / "tmp" / "ddg_open_ai.html"
     assert expected.exists(), f"Expected dump file {expected} not found"
-    assert expected.read_text() == "<html><body>dummy</body></html>" 
+    assert expected.read_text() == "<html><body>dummy</body></html>"

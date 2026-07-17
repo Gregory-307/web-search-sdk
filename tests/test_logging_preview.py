@@ -1,8 +1,7 @@
-import os
-import pytest
-import asyncio
-from contextlib import asynccontextmanager
 import importlib
+from contextlib import asynccontextmanager
+
+import pytest
 
 from web_search_sdk.utils import http as http_utils
 
@@ -59,4 +58,4 @@ async def test_http_logging_body_len(monkeypatch):
     assert resp_events, "No response event captured"
     evt = resp_events[0]
     assert "body_len" in evt and evt["body_len"] == 5
-    assert "preview" not in evt, "Preview should not be logged without DEBUG_TRACE" 
+    assert "preview" not in evt, "Preview should not be logged without DEBUG_TRACE"

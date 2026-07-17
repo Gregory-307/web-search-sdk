@@ -1,4 +1,3 @@
-
 """Structured logging helper using structlog."""
 # If structlog is unavailable (e.g., minimal runtime env) we fall back to a
 # no-op shim that preserves the public API (get_logger) so callers continue
@@ -6,9 +5,7 @@
 
 import logging
 import os
-import asyncio
-from types import MethodType
-from typing import Any, Dict
+from typing import Any
 
 try:
     import httpx
@@ -115,14 +112,15 @@ def get_logger(name: str | None = None):
 # HTTP logging patches (httpx and requests)
 # ---------------------------------------------------------------------------
 
+
 def _setup_httpx_logging():
     """Patch httpx.AsyncClient to log all requests/responses when DEBUG_SCRAPERS=1."""
     if not httpx or os.getenv("DEBUG_SCRAPERS") not in {"1", "true", "True"}:
         return
-    
+
     if getattr(httpx, "_patched_for_logging", False):
         return
-    
+
     _orig_send = httpx.AsyncClient.send
 
     async def _patched_send(self: httpx.AsyncClient, request: httpx.Request, *args, **kwargs):  # type: ignore[override]
@@ -173,21 +171,21 @@ def _setup_requests_logging():
     """Patch requests.Session to log all requests/responses when DEBUG_SCRAPERS=1."""
     if not requests or os.getenv("DEBUG_SCRAPERS") not in {"1", "true", "True"}:
         return
-    
+
     if getattr(requests, "_patched_for_logging", False):
         return
-    
+
     logger = get_logger("requests")
     _orig_request = requests.Session.request  # type: ignore[attr-defined]
 
     def _patched_request(self: requests.Session, method: str, url: str, *args: Any, **kwargs: Any):  # type: ignore[override]
-        headers: Dict[str, str] | None = kwargs.get("headers")
+        headers: dict[str, str] | None = kwargs.get("headers")
         logger.info("request", method=method, url=url, headers=headers or {})
 
         resp: requests.Response = _orig_request(self, method, url, *args, **kwargs)
 
         body_len = len(resp.content) if resp.content is not None else 0
-        log_kwargs: Dict[str, Any] = {
+        log_kwargs: dict[str, Any] = {
             "status": resp.status_code,
             "url": resp.url,
             "headers": dict(resp.headers),
@@ -207,4 +205,4 @@ def _setup_requests_logging():
 
 # Auto-setup logging patches on import
 _setup_httpx_logging()
-_setup_requests_logging() 
+_setup_requests_logging()

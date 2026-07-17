@@ -1,7 +1,5 @@
-from web_search_sdk.scrapers.base import ScraperContext
 from web_search_sdk.browser import fetch_html
-
-
+from web_search_sdk.scrapers.base import ScraperContext
 
 
 def test_playwright_stealth_unavailable(monkeypatch):
@@ -11,5 +9,6 @@ def test_playwright_stealth_unavailable(monkeypatch):
     ctx = ScraperContext(use_browser=True, browser_type="playwright_stealth")
 
     import asyncio
+
     html = asyncio.run(fetch_html("btc rally", lambda t: "https://example.com", ctx))
-    assert html == "" 
+    assert html == ""

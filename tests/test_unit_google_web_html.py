@@ -6,9 +6,10 @@ it verifies token extraction and stop-word removal.  No live network calls.
 
 import pytest
 
-from web_search_sdk.scrapers import google_web_top_words
 from web_search_sdk.scrapers import google_web as gw
+from web_search_sdk.scrapers import google_web_top_words
 from web_search_sdk.scrapers.base import ScraperContext
+
 from .conftest import show
 
 HTML_SNIPPET = """
@@ -37,4 +38,4 @@ async def test_google_web_html_parse(monkeypatch):
     assert words, "Token list should not be empty"
     assert "python" in words[0:2]
 
-    show("UNIT", "google_web_top_words (HTML)", "Input  : python", f"Output : {words}") 
+    show("UNIT", "google_web_top_words (HTML)", "Input  : python", f"Output : {words}")

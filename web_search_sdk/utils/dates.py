@@ -3,11 +3,11 @@
 `parse_fuzzy_date` accepts strings like "2020-01-15", "2020/1/15",
 "-30 days" (meaning today minus 30 days) and returns a `datetime.date`.
 """
+
 from __future__ import annotations
 
 import re
-from datetime import datetime, date, timedelta
-from typing import Union
+from datetime import date, timedelta
 
 __all__ = ["parse_fuzzy_date"]
 
@@ -15,7 +15,7 @@ _DATE_RE = re.compile(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$")
 _DAYS_RE = re.compile(r"^-?(\d+)\s*days?$", re.IGNORECASE)
 
 
-def parse_fuzzy_date(text: Union[str, date]) -> date:
+def parse_fuzzy_date(text: str | date) -> date:
     """Parse a human-friendly date string into a `datetime.date`.
 
     Examples
@@ -43,4 +43,4 @@ def parse_fuzzy_date(text: Union[str, date]) -> date:
         days = int(m.group(1))
         return date.today() - timedelta(days=days)
 
-    raise ValueError(f"Unrecognised date format: {text}") 
+    raise ValueError(f"Unrecognised date format: {text}")

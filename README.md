@@ -1,335 +1,150 @@
-# Web-Search SDK
+# Web Search SDK
 
-[![Try it in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1NJD7hqfaubKKEzk7XmtXaApMLPKJKdge#scrollTo=jjvjnyumbsZM)
+An async Python 3.12 SDK for collecting public web text and turning it into
+truthful, structured records for downstream sentiment analysis.
 
+The core install is HTTP-only. Browser automation and market-data helpers are
+optional extras, so ordinary package imports stay lightweight and do not start
+or import a browser stack.
 
-GENERATED README - TOO BUSY TO WRITE README RN, WROTE DEMO INSTEAD ABOVE
+## Native setup
 
-
-This repository houses an **async Python toolkit** for collecting and preprocessing publicly available web data that can later feed into downstream analytics or trading pipelines.
-
-The helpers here grew out of our internal *Stock-Algorithm* work-bench; they have been extracted and cleaned up so that they can operate **stand-alone** and slot easily into other code-bases.
-
-Primary objective
------------------
-Provide an automated way to pull *related terms*, *recent news snippets*, *Wikipedia context*, *search-engine SERP keywords*, *Google Trends curves* and *basic price history* for any set of seed terms we are researching. The data will later be correlated with additional signals (Twitter sentiment, on-chain metrics, etc.) to decide hedge ratios and spot inflection points.
-
-Design principles
------------------
-• **Uniform API** – every scraper is an async function that accepts `(term, ctx)` and returns structured data.  
-• **Fail-safe** – built-in retries, multiple fall-backs (legacy HTML, headless browser) and optional proxy support.  
-• **Minimal ceremony** – functional helpers, no inheritance tree.  
-• **Self-contained** – no dependency on the old monorepo; can be vendor-dropped or installed from PyPI.  
-
-If you only need a quick data pull you can copy-paste one function; if you need an automated pipeline you can orchestrate everything with `asyncio.gather`.
-
-## Available pull-helpers
-
-| Source / Provider        | Public Helper                               | Typical Output                 | Notes                                           |
-|--------------------------|---------------------------------------------|--------------------------------|-------------------------------------------------|
-| RelatedWords.org         | `scrapers.related_words`                    | `list[str]`                    | JSON API with HTML & Selenium fall-backs        |
-| Wikipedia                | `scrapers.wikipedia_top_words`              | top-N tokens                   | Legacy Newspaper3k → raw HTML → JSON API        |
-| Google News RSS          | `scrapers.google_news_top_words`            | top-N tokens                   | No CAPTCHA risk; RSS is lightweight             |
-| Google Web Search (links)| `scrapers.search.search_and_parse`          | `{links, tokens}`              | Returns outbound links **and** tokens in one call |
-| Google Trends            | ~~`scrapers.interest_over_time`~~ *(deprecated – see trends-sdk)* | `pandas.DataFrame` | Will be removed in v0.3 – migrate to **trends-sdk** |
-| Yahoo Finance            | `scrapers.fetch_stock_data`                 | OHLCV `pandas.DataFrame`       | Async wrapper around *yfinance*                 |
-| Bloomberg / CNBC         | `scrapers.paywall.fetch_*`                 | full article text              | Quick HTTP → Playwright fallback for paywalls   |
-
-For exact signatures see the [API reference](#api-reference).
-
-## Installation (5 min)
+Install [uv](https://docs.astral.sh/uv/) once, then run from this repository:
 
 ```bash
-# 1 – create an isolated environment (recommended)
-python -m venv .venv
-source .venv/bin/activate        # Linux/macOS
-# .venv\Scripts\activate.bat     # Windows PowerShell
+uv sync --locked --extra test
+uv run pytest
+```
 
-# 2 – install the core package in **editable** mode
-pip install -e .                 # Core package only
+Optional capabilities are installed explicitly:
 
-# Optional extras for advanced features:
-pip install -e ".[browser]"      # + Playwright/Selenium for paywalls & CAPTCHAs
-pip install -e ".[test]"         # + pytest for development
-pip install -e ".[browser,test]" # + Both extras
+```bash
+# Browser-backed scrapers
+uv sync --locked --extra test --extra browser
+uv run playwright install firefox
 
-Run (choose browser engine):
-    python demo.py --term "btc rally" --url "https://www.bloomberg.com/..." --engine selenium
+# Legacy trends and market-data helpers
+uv sync --locked --extra test --extra market
+```
 
-Available engines:
+No path injection is required. Run scripts and tests through `uv run`, or
+activate the repository-local `.venv` created by uv.
 
-| Engine flag | Description | Notes |
-|-------------|-------------|-------|
-| `selenium` *(default)* | Firefox via Geckodriver | No extra install on CI
-| `playwright` | Playwright-Firefox | Faster than Selenium
-| `stealth` | Playwright-Chromium with anti-bot patches | Best for heavy CAPTCHA sites |
+## Structured search output
 
-The SDK requires **Python ≥ 3.10**.
-
-## Quick start
+Google News and DuckDuckGo return a common shape with an explicit provider
+outcome:
 
 ```python
 import asyncio
-from web_search_sdk.scrapers import wikipedia_top_words
-from web_search_sdk.scrapers.base import ScraperContext
+
+from web_search_sdk import google_news
 
 
-async def main():
-    ctx = ScraperContext(debug=True)
-    tokens = await wikipedia_top_words("artificial intelligence", ctx=ctx, top_n=15)
-    print(tokens)
+async def main() -> None:
+    response = await google_news("bitcoin ETF", top_n=10)
+    print(response["status"])  # success, empty, blocked, or error
+    for item in response["items"]:
+        print(item["published_at"], item["url"], item["text"])
 
 
 asyncio.run(main())
 ```
 
-Expected console output (truncated):
+Every item contains its own source, text, URL, publication time, publisher,
+and rank. Provider failure details are categories such as an exception class;
+credentials, proxy URLs, and response bodies are not included.
 
-```text
-['intelligence', 'ai', 'artificial', 'machine', 'learning', 'computer', 'systems', 'data', 'human', 'algorithm']
-```
-
-The Wikipedia helper uses a public HTML endpoint (and a JSON fallback) and is therefore the most reliable first test.
-
-Need a one-liner?  A smoke-test script is provided:
-
-```bash
-python smoke_test.py "openai"
-```
-
-It runs without installation (the script injects the repo root into `sys.path`).
-
-> **Heads-up** The `google_web_top_words` helper can be throttled or CAPTCHA-blocked by Google. The module has legacy and Selenium fallbacks, but reliability is currently lower than the other helpers; use it with that expectation or route it through proxies.
-
-Parameter note
---------------
-Most helpers accept `top_n` (default varies by source).  Setting `top_n=10` returns the ten most frequent tokens after stop-word removal.  For helpers that do not support ranking (e.g. `related_words`) the parameter is ignored.
-
-## API Reference (cheat-sheet)
+The normalized models are available directly:
 
 ```python
-from web_search_sdk.scrapers import (
-    related_words,
-    wikipedia_top_words,
-    google_news_top_words,
-    google_web_top_words,
+from web_search_sdk import SearchItem, SearchResponse, SearchStatus
+```
+
+## Sentiment-suite contract
+
+Convert a normalized result to the versioned `TextEvent` boundary without
+importing another repository:
+
+```python
+from datetime import datetime, timezone
+
+from web_search_sdk import SearchItem, text_event_from_search_item
+
+item = SearchItem(
+    source="google_news",
+    text="Bitcoin (BTC) rallies as spot ETF inflows accelerate",
+    url="https://example.com/markets/bitcoin",
+    published_at=datetime(2026, 7, 16, 14, 30, tzinfo=timezone.utc),
+    rank=1,
 )
-from web_search_sdk.scrapers.trends import interest_over_time
-from web_search_sdk.scrapers.stock import fetch_stock_data
-
-# Shared runtime configuration object
-from web_search_sdk.scrapers.base import ScraperContext, gather_scrapers
-```
-
-### ScraperContext
-Key parameters you can tweak:
-
-| Argument        | Default | Description                                                 |
-|-----------------|---------|-------------------------------------------------------------|
-| `headers`       | `{}`    | Base HTTP headers merged into every request                 |
-| `timeout`       | `20.0`  | Connect & read timeout (seconds)                            |
-| `retries`       | `2`     | Automatic HTTP retry count                                  |
-| `user_agents`   | `None`  | Custom UA rotation list (falls back to 2 builtin strings)   |
-| `proxy`         | `None`  | e.g. `http://user:pass@host:port`                           |
-| `use_browser`   | `False` | Enable Selenium fallback where supported                    |
-| `debug`         | `False` | Verbose logging via *structlog*                             |
-
-Combine scrapers easily:
-
-```python
-terms = ["openai", "chatgpt", "generative ai"]
-ctx   = ScraperContext(user_agents=my_pool, proxy="http://proxy.local:8080")
-words_per_term = await gather_scrapers(
-    terms,
-    fetch=google_web_top_words._fetch_html,
-    parse=lambda html, term, ctx: google_web_top_words._parse_html(html, 20),
-    ctx=ctx,
+event = text_event_from_search_item(
+    item,
+    collected_at=datetime.now(timezone.utc),
+    asset_mentions=["BTC"],
+    query_alias="btc-market-news",
 )
+print(event.model_dump_json())
 ```
 
-## High-level architecture
+The adapter produces schema `1.0.0`, UTC timestamps, normalized asset symbols,
+a source-namespaced event ID, and a deterministic SHA-256 content hash. If a
+provider has no publication time, provenance explicitly records the use of
+collection time as the downstream event-time fallback.
 
-```mermaid
-graph TD
-  subgraph "Scrapers"
-    RW["related_words"]
-    WP["wikipedia_top_words"]
-    GN["google_news_top_words"]
-    GW["google_web_top_words"]
-    TR["interest_over_time"]
-    ST["fetch_stock_data"]
-  end
+The reference fixture is
+[`tests/fixtures/contracts/text_event_web_v1.json`](tests/fixtures/contracts/text_event_web_v1.json).
 
-  utils_http["utils.http"]
-  utils_logging["utils.logging"]
-  browser["browser (Selenium)"]
+## Public helpers
 
-  RW --> utils_http
-  WP --> utils_http
-  GN --> utils_http
-  GW --> utils_http
-  GW -.optional fallback .-> browser
-  utils_http --> utils_logging
-  TR -->|"pytrends"| ExternalPytrends[("pytrends")]
-  ST -->|"yfinance"| ExternalYF[("yfinance")]
-```
+| Helper | Purpose | Default transport |
+| --- | --- | --- |
+| `google_news` | Structured Google News RSS items | HTTP |
+| `ddg_search_and_parse` | Structured DuckDuckGo results | HTTP |
+| `search_and_parse` | DuckDuckGo-first search with fallback | HTTP |
+| `related_words` | RelatedWords/Datamuse terms | HTTP |
+| `wikipedia` | Structured Wikipedia article data | HTTP |
+| `wikipedia_top_words` | Legacy-compatible Wikipedia tokens | HTTP |
+| `google_web_top_words` | Google SERP tokens | Optional browser |
+| `extract_article_content` | General article extraction | HTTP, optional browser |
 
-Dashed edge = optional Selenium path activated when `ScraperContext(use_browser=True)`.
-
----
-### Browser & Paywalls (one-liner)
-`ScraperContext(use_browser=True, browser_type="playwright")` enables JS rendering for Google CAPTCHAs & paywalls (Bloomberg/CNBC).  Selenium remains as a legacy option.
-
-## Offline Mode
-When you need to run the toolkit in an **air-gapped** environment (CI without
-external network or airplane-mode laptop) set:
-
-```bash
-export OFFLINE_MODE=1                 # or "true"
-```
-
-All outbound HTTP calls are short-circuited and the helpers return deterministic
-HTML fixtures packaged under `tests/fixtures/`.  This keeps the demo notebook
-and unit-tests fully reproducible with **zero** network.
-
----
-## Demo notebook (Colab-friendly)
-The repo contains a draft source file at
-`docs/demo_notebook_v2_draft.py` which is converted into a Jupyter notebook via:
-
-```bash
-# generate & execute the **v2** notebook
-scripts/convert_demo.py --draft docs/demo_notebook_v2_draft.py --out docs/demo_v2.ipynb
-scripts/run_demo.py --nb docs/demo_v2.ipynb
-```
-
-The notebook is **self-bootstrapping** – when opened in Colab it clones the repo
-(if missing), installs the package in editable mode, Playwright browsers and
-then runs through several real-world scrapes (DuckDuckGo, paywall fetches,
-telemetry debug etc.).  When `OFFLINE_MODE=1` the notebook falls back to the
-fixture HTML so it stays lightning-fast.
-
----
-### Testing & Coverage (local)
-
-```bash
-# run tests + coverage
-pytest --cov=web_search_sdk --cov-report=term -q
-```
-
-The CI pipeline always uploads a `coverage.xml` artifact; currently it does **not
-fail** the build on coverage percentage (we’re still adding new tests), but the
-report is available for inspection in GitHub Actions.
-
----
-## Contributing
-
-1. **Fork** → **create branch** → **PR**.  PRs must pass CI (tests + coverage).
-2. Respect *PEP 8*; run `black` / `ruff` locally before pushing.
-3. Update or add tests for any new scraper.
-4. Document the new feature in this README.
-
----
-## Documentation & Resources
-
-- **📓 [Interactive Demo](https://colab.research.google.com/drive/1NJD7hqfaubKKEzk7XmtXaApMLPKJKdge#scrollTo=jjvjnyumbsZM)** - Try the SDK in Colab
-- **📋 [Quick Reference](docs/CHEATSHEET.md)** - API cheat sheet and examples
-- **🗺️ [Grand Plan](GrandPlan/)** - Roadmap and detailed planning documents
-- **🤝 [Contributing](CONTRIBUTING.md)** - How to contribute to the project
-
-For roadmap & detailed progress see **GrandPlan/Progress_Report_v0.2.0.md**.
-
----
-## License
-
-MIT – see [LICENSE](LICENSE) for full text. 
-
----
-## Paywall Handling (Bloomberg & CNBC)
-
-Some premium outlets require full JS rendering to reveal the article body.  When you
-set `ScraperContext(use_browser=True, browser_type="playwright")` the helper
-`web_search_sdk.scrapers.paywall` will transparently spin up a headless
-Playwright-Firefox session, navigate, wait for `<article>` and return the cleaned
-text.  Example:
+All helpers accept a `ScraperContext` where applicable:
 
 ```python
-from web_search_sdk.scrapers.paywall import fetch_bloomberg
 from web_search_sdk.scrapers.base import ScraperContext
 
-ctx = ScraperContext(use_browser=True, browser_type="playwright", debug=True)
-article = await fetch_bloomberg("https://www.bloomberg.com/news/articles/...", ctx)
-print(article[:400], "…")
+context = ScraperContext(timeout=15, retries=2, proxy=None, debug=False)
 ```
 
-If `use_browser=False` a quick HTTP fetch is attempted first—fast and cheap for
-pages without heavy paywall JS.
+## Testing and CI parity
 
----
-## Output Utilities
-Lightweight helpers live in `web_search_sdk.utils.output`.
+The default suite is deterministic and excludes tests marked `live`:
 
-```python
-from web_search_sdk.utils.output import to_json, to_csv
-
-data = {"term": "btc rally", "score": 0.87}
-# overwrite
-to_json(data, "out/latest.json")
-# append (keeps a JSON list)
-to_json(data, "out/history.json", append=True)
-
-rows = [{"term": "btc", "hits": 120}, {"term": "eth", "hits": 95}]
-# create or overwrite CSV
-to_csv(rows, "out/stats.csv")
-# append more rows later
-to_csv(rows, "out/stats.csv", append=True)
+```bash
+uv sync --locked --extra test
+uv run ruff check web_search_sdk tests smoke_test.py
+uv run ruff format --check web_search_sdk tests smoke_test.py
+uv run pytest
+uv build
 ```
 
-The helpers are idempotent and create parent folders automatically.
+Run external-provider diagnostics only when intentionally testing network
+behaviour:
 
----
-## Deprecated Module – trends
-`web_search_sdk.scrapers.trends` is now **deprecated** in favour of the separate
-`trends-sdk` repo.  Importing it raises a `DeprecationWarning` and prints a
-reminder so you can migrate without surprises.
-```python
-import warnings, web_search_sdk.scrapers.trends  # warning printed once
+```bash
+uv run pytest -m live
 ```
---- 
----
-## Demo Notebook Contents (v0.3)
-The generated notebook ([docs/demo_v2.ipynb](docs/demo_v2.ipynb)) now walks through **twelve** focused
-examples – each runnable offline via fixtures:
 
-1. DuckDuckGo top-words (primary engine)
-2. Wikipedia top-words
-3. RelatedWords synonym expansion
-4. Google News RSS keywords
-5. Paywall article retrieval (Bloomberg/CNBC)
-6. Optional Google SERP fallback *(guarded by RUN_GOOGLE)*
-7. Twitter login & sample scrape *(guarded by RUN_TWITTER)*
-8. Output helpers – `to_json`, `to_csv`, append
-9. Text helpers – `tokenise`, `remove_stopwords`, `most_common`
-10. Rate-limit decorator example
-11. Parallel scraping with `gather_scrapers`
-12. Advanced debugging – `LOG_SCRAPERS` file output + `DEBUG_TRACE` body preview
+Live tests are diagnostic: provider throttling, blocking, and layout changes
+are external conditions rather than proof that the offline SDK is broken.
 
-Set `OFFLINE_MODE=1` to skip network-dependent cells; set `RUN_GOOGLE=1` to
-activate the Google SERP fallback cell.
+## Package boundaries
 
----
-### New Helper Reference
-Added since v0.2:
+- Core: HTTP acquisition, parsing, structured models, and contract conversion.
+- `browser` extra: Playwright, Selenium, and webdriver-manager.
+- `market` extra: pandas, pytrends, and yfinance legacy helpers.
+- `test` extra: pytest, Ruff, coverage, and build tooling.
 
-| Helper | Purpose |
-|--------|---------|
-| `scrapers.wikipedia_top_words` | Token frequency from Wikipedia page |
-| `scrapers.related.related_words` | Synonyms via RelatedWords.org |
-| `scrapers.news.google_news_top_words` | Keywords from Google News headlines |
-| `scrapers.stock.fetch_stock_data` | OHLCV DataFrame via yfinance |
-| `utils.rate_limit.rate_limiter` | Async token-bucket decorator |
-| `utils.text.tokenise / remove_stopwords / most_common` | Text helpers used by scrapers |
-| `utils.output.to_csv` | CSV writer/append utility |
-| `ScraperContext.choose_ua()` | Random UA pick from custom list |
-
-All of these are showcased in the notebook.
+The wheel includes the package root, nested scraper modules, utilities, and the
+stop-word resource. CI installs the wheel outside the source tree to catch
+packaging regressions.

@@ -9,6 +9,6 @@ Consolidated modules:
 
 Legacy modules (deprecated):
 - http_logging: Re-exports from logging
-- requests_logging: Re-exports from logging  
+- requests_logging: Re-exports from logging
 - rate_limit: Re-exports from http
-""" 
+"""

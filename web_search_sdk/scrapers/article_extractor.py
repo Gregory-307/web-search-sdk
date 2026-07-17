@@ -9,15 +9,16 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import ScraperContext
 from web_search_sdk import browser as br
 from web_search_sdk.utils.logging import get_logger
+
+from .base import ScraperContext
 
 logger = get_logger("ArticleExtractor")
 
@@ -28,7 +29,7 @@ __all__ = [
 ]
 
 
-def _extract_title(soup: BeautifulSoup) -> Optional[str]:
+def _extract_title(soup: BeautifulSoup) -> str | None:
     """Extract article title from various HTML structures."""
     # Common title selectors
     title_selectors = [
@@ -39,18 +40,20 @@ def _extract_title(soup: BeautifulSoup) -> Optional[str]:
         "meta[property='og:title']",  # Open Graph
         "meta[name='twitter:title']",  # Twitter Card
     ]
-    
+
     for selector in title_selectors:
         element = soup.select_one(selector)
         if element:
-            title = element.get_text().strip() if element.name != "meta" else element.get("content", "")
+            title = (
+                element.get_text().strip() if element.name != "meta" else element.get("content", "")
+            )
             if title and len(title) > 10:  # Reasonable title length
                 return title
-    
+
     return None
 
 
-def _extract_author(soup: BeautifulSoup) -> Optional[str]:
+def _extract_author(soup: BeautifulSoup) -> str | None:
     """Extract author information from various HTML structures."""
     # Common author selectors
     author_selectors = [
@@ -63,18 +66,20 @@ def _extract_author(soup: BeautifulSoup) -> Optional[str]:
         "span.author",
         "a.author",
     ]
-    
+
     for selector in author_selectors:
         element = soup.select_one(selector)
         if element:
-            author = element.get_text().strip() if element.name != "meta" else element.get("content", "")
+            author = (
+                element.get_text().strip() if element.name != "meta" else element.get("content", "")
+            )
             if author and len(author) > 2:
                 return author
-    
+
     return None
 
 
-def _extract_date(soup: BeautifulSoup) -> Optional[str]:
+def _extract_date(soup: BeautifulSoup) -> str | None:
     """Extract publication date from various HTML structures."""
     # Common date selectors
     date_selectors = [
@@ -87,7 +92,7 @@ def _extract_date(soup: BeautifulSoup) -> Optional[str]:
         "time",
         "[datetime]",
     ]
-    
+
     for selector in date_selectors:
         element = soup.select_one(selector)
         if element:
@@ -97,7 +102,7 @@ def _extract_date(soup: BeautifulSoup) -> Optional[str]:
                 date_str = element.get("datetime")
             else:
                 date_str = element.get_text().strip()
-            
+
             if date_str:
                 # Try to parse and format the date
                 try:
@@ -110,7 +115,7 @@ def _extract_date(soup: BeautifulSoup) -> Optional[str]:
                             continue
                 except Exception:
                     pass
-    
+
     return None
 
 
@@ -127,29 +132,51 @@ def _extract_source(url: str) -> str:
 
 def _extract_main_content(soup: BeautifulSoup) -> str:
     """Extract main article content, removing navigation and ads."""
-    
+
     # Remove unwanted elements more aggressively
     for selector in [
-        "nav", "header", "footer", "aside",
-        ".navigation", ".menu", ".sidebar",
-        ".advertisement", ".ad", ".ads",
-        ".social-share", ".comments",
-        "script", "style", "noscript",
-        ".skip-navigation", ".site-header", ".site-footer",
-        ".breadcrumb", ".breadcrumbs",
-        ".related-articles", ".recommended",
-        ".newsletter", ".subscribe",
-        ".video-player", ".video-container",
-        ".image-caption", ".caption",
-        ".author-bio", ".author-info",
-        ".article-meta", ".article-info",
-        ".share-buttons", ".social-media",
-        ".advertisement", ".sponsored",
-        ".newsletter-signup", ".email-signup"
+        "nav",
+        "header",
+        "footer",
+        "aside",
+        ".navigation",
+        ".menu",
+        ".sidebar",
+        ".advertisement",
+        ".ad",
+        ".ads",
+        ".social-share",
+        ".comments",
+        "script",
+        "style",
+        "noscript",
+        ".skip-navigation",
+        ".site-header",
+        ".site-footer",
+        ".breadcrumb",
+        ".breadcrumbs",
+        ".related-articles",
+        ".recommended",
+        ".newsletter",
+        ".subscribe",
+        ".video-player",
+        ".video-container",
+        ".image-caption",
+        ".caption",
+        ".author-bio",
+        ".author-info",
+        ".article-meta",
+        ".article-info",
+        ".share-buttons",
+        ".social-media",
+        ".advertisement",
+        ".sponsored",
+        ".newsletter-signup",
+        ".email-signup",
     ]:
         for element in soup.select(selector):
             element.decompose()
-    
+
     # CNBC-specific content selectors
     cnbc_selectors = [
         ".ArticleBody-articleBody",
@@ -159,9 +186,9 @@ def _extract_main_content(soup: BeautifulSoup) -> str:
         ".story-body",
         ".article-content",
         ".post-content",
-        ".entry-content"
+        ".entry-content",
     ]
-    
+
     # Try CNBC-specific selectors first
     for selector in cnbc_selectors:
         element = soup.select_one(selector)
@@ -169,7 +196,7 @@ def _extract_main_content(soup: BeautifulSoup) -> str:
             text = element.get_text(" ", strip=True)
             if len(text) > 200:  # Reasonable content length
                 return text
-    
+
     # General content selectors
     general_selectors = [
         "article",
@@ -179,9 +206,9 @@ def _extract_main_content(soup: BeautifulSoup) -> str:
         ".main-content",
         ".article",
         ".post",
-        ".entry"
+        ".entry",
     ]
-    
+
     # Try general content selectors
     for selector in general_selectors:
         element = soup.select_one(selector)
@@ -189,7 +216,7 @@ def _extract_main_content(soup: BeautifulSoup) -> str:
             text = element.get_text(" ", strip=True)
             if len(text) > 200:  # Reasonable content length
                 return text
-    
+
     # Fallback: get body text but filter out navigation
     body = soup.find("body")
     if body:
@@ -197,7 +224,7 @@ def _extract_main_content(soup: BeautifulSoup) -> str:
         for element in body.find_all(["nav", "header", "footer", "aside"]):
             element.decompose()
         return body.get_text(" ", strip=True)
-    
+
     return ""
 
 
@@ -205,77 +232,76 @@ def clean_text(text: str) -> str:
     """Clean and normalize extracted text."""
     if not text:
         return ""
-    
+
     # Remove navigation artifacts
     navigation_patterns = [
-        r'Skip Navigation.*?Menu',
-        r'Markets Business Investing Tech Politics Video Watchlist',
-        r'Investing Club PRO Livestream',
-        r'Key Points',
-        r'Don\'t miss these insights from CNBC PRO',
-        r'watch now VIDEO \d+:\d+',
-        r'Closing Bell: Overtime',
-        r'Subscribe to CNBC PRO',
-        r'Subscribe to Investing Club',
-        r'Licensing & Reprints',
-        r'CNBC Councils',
-        r'Select Personal Finance',
-        r'CNBC on Peacock',
-        r'Join the CNBC Panel',
-        r'Supply Chain Values',
-        r'Select Shopping',
-        r'Closed Captioning',
-        r'Digital Products',
-        r'News Releases',
-        r'Internships',
-        r'Corrections',
-        r'About CNBC',
-        r'Ad Choices',
-        r'Site Map',
-        r'Podcasts',
-        r'Careers',
-        r'Help',
-        r'Contact',
-        r'News Tips',
-        r'Got a confidential news tip\?',
-        r'Get In Touch',
-        r'CNBC Newsletters',
-        r'Sign up for free newsletters',
-        r'Get this delivered to your inbox',
-        r'Advertise With Us',
-        r'Please Contact Us',
-        r'Privacy Policy',
-        r'California Consumer Privacy Act',
-        r'CA Notice',
-        r'Terms of Service',
-        r'© \d{4} CNBC LLC\. All Rights Reserved\.',
-        r'A Division of NBCUniversal',
-        r'Data is a real-time snapshot',
-        r'Data is delayed at least 15 minutes\.',
-        r'Global Business and Financial News, Stock Quotes, and Market Data and Analysis\.',
-        r'Market Data Terms of Use and Disclaimers',
-        r'Data also provided by',
-        r'Reuters logo'
+        r"Skip Navigation.*?Menu",
+        r"Markets Business Investing Tech Politics Video Watchlist",
+        r"Investing Club PRO Livestream",
+        r"Key Points",
+        r"Don\'t miss these insights from CNBC PRO",
+        r"watch now VIDEO \d+:\d+",
+        r"Closing Bell: Overtime",
+        r"Subscribe to CNBC PRO",
+        r"Subscribe to Investing Club",
+        r"Licensing & Reprints",
+        r"CNBC Councils",
+        r"Select Personal Finance",
+        r"CNBC on Peacock",
+        r"Join the CNBC Panel",
+        r"Supply Chain Values",
+        r"Select Shopping",
+        r"Closed Captioning",
+        r"Digital Products",
+        r"News Releases",
+        r"Internships",
+        r"Corrections",
+        r"About CNBC",
+        r"Ad Choices",
+        r"Site Map",
+        r"Podcasts",
+        r"Careers",
+        r"Help",
+        r"Contact",
+        r"News Tips",
+        r"Got a confidential news tip\?",
+        r"Get In Touch",
+        r"CNBC Newsletters",
+        r"Sign up for free newsletters",
+        r"Get this delivered to your inbox",
+        r"Advertise With Us",
+        r"Please Contact Us",
+        r"Privacy Policy",
+        r"California Consumer Privacy Act",
+        r"CA Notice",
+        r"Terms of Service",
+        r"© \d{4} CNBC LLC\. All Rights Reserved\.",
+        r"A Division of NBCUniversal",
+        r"Data is a real-time snapshot",
+        r"Data is delayed at least 15 minutes\.",
+        r"Global Business and Financial News, Stock Quotes, and Market Data and Analysis\.",
+        r"Market Data Terms of Use and Disclaimers",
+        r"Data also provided by",
+        r"Reuters logo",
     ]
-    
+
     for pattern in navigation_patterns:
-        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
-    
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.DOTALL)
+
     # Remove extra whitespace
-    text = re.sub(r'\s+', ' ', text)
-    
+    text = re.sub(r"\s+", " ", text)
+
     # Remove common HTML artifacts
-    text = re.sub(r'\[.*?\]', '', text)  # Remove brackets
-    text = re.sub(r'\(.*?\)', '', text)  # Remove parentheses (optional)
-    
+    text = re.sub(r"\[.*?\]", "", text)  # Remove brackets
+
     # Clean up line breaks and spacing
-    text = text.replace('\n', ' ').replace('\r', ' ')
-    text = re.sub(r'\s+', ' ', text)
-    
+    text = text.replace("\n", " ").replace("\r", " ")
+    text = re.sub(r"\s+", " ", text)
+
     return text.strip()
 
 
-def extract_metadata(soup: BeautifulSoup, url: str) -> Dict[str, Any]:
+def extract_metadata(soup: BeautifulSoup, url: str) -> dict[str, Any]:
     """Extract all metadata from the article."""
     return {
         "title": _extract_title(soup),
@@ -287,30 +313,31 @@ def extract_metadata(soup: BeautifulSoup, url: str) -> Dict[str, Any]:
 
 async def _fetch_html(url: str, ctx: ScraperContext) -> str:
     """Fetch HTML content with fallback to browser if needed."""
-    
+
     # Try HTTP first
     try:
-        # Pass proxy param **only** when a proxy string is provided – httpx will raise
-        # if we send `proxies=None`.
+        # httpx 0.28 uses the singular ``proxy`` keyword.
         client_kwargs = {"timeout": ctx.timeout}
         if ctx.proxy:
-            client_kwargs["proxies"] = ctx.proxy
+            client_kwargs["proxy"] = ctx.proxy
 
         async with httpx.AsyncClient(**client_kwargs) as client:
             headers = ctx.headers.copy()
-            headers.setdefault("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            headers.setdefault(
+                "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            )
             headers.setdefault("Accept-Language", "en-US,en;q=0.9")
-            
+
             resp = await client.get(url, headers=headers, follow_redirects=True)
             resp.raise_for_status()
             html = resp.text
 
             # Detect common CDN block pages – they often exceed 1 kB but have no real article.
             _block_markers = [
-                "Access Denied",        # Akamai / CloudFront
-                "Captcha",              # generic captcha page
-                "are you a robot",      # Cloudflare / Bloomberg
-                "Request blocked",      # generic block
+                "Access Denied",  # Akamai / CloudFront
+                "Captcha",  # generic captcha page
+                "are you a robot",  # Cloudflare / Bloomberg
+                "Request blocked",  # generic block
             ]
 
             blocked = any(m.lower() in html.lower() for m in _block_markers)
@@ -326,7 +353,7 @@ async def _fetch_html(url: str, ctx: ScraperContext) -> str:
     except Exception as e:
         if ctx.debug:
             logger.warning("http_failed", url=url, error=str(e))
-    
+
     # Browser fallback if enabled --------------------------------------------------
     if ctx.use_browser:
         # First try with the configured browser_type (Playwright or Selenium)
@@ -334,7 +361,9 @@ async def _fetch_html(url: str, ctx: ScraperContext) -> str:
             html = await br.fetch_html("_article", lambda _t: url, ctx)
             if html and len(html) > 1000:
                 if ctx.debug:
-                    logger.info("browser_success", url=url, length=len(html), engine=ctx.browser_type)
+                    logger.info(
+                        "browser_success", url=url, length=len(html), engine=ctx.browser_type
+                    )
                 return html
         except Exception as e:
             if ctx.debug:
@@ -361,20 +390,17 @@ async def _fetch_html(url: str, ctx: ScraperContext) -> str:
             except Exception as e:
                 if ctx.debug:
                     logger.warning("browser_failed", url=url, error=str(e), engine="selenium")
-    
+
     return ""
 
 
-async def extract_article_content(
-    url: str, 
-    ctx: ScraperContext | None = None
-) -> Dict[str, Any]:
+async def extract_article_content(url: str, ctx: ScraperContext | None = None) -> dict[str, Any]:
     """Extract clean article content from any URL.
-    
+
     Args:
         url: The URL to extract content from
         ctx: ScraperContext for configuration
-        
+
     Returns:
         Dictionary containing:
         - title: Article title
@@ -389,7 +415,7 @@ async def extract_article_content(
     # Default: enable browser fallback because many publishers block plain HTTP.
     if ctx is None:
         ctx = ScraperContext(use_browser=True, browser_type="playwright_stealth")
-    
+
     # Fetch HTML
     html = await _fetch_html(url, ctx)
     if not html:
@@ -401,26 +427,26 @@ async def extract_article_content(
             "author": None,
             "source": _extract_source(url),
             "url": url,
-            "error": "Failed to fetch content"
+            "error": "Failed to fetch content",
         }
-    
+
     # Parse HTML
     soup = BeautifulSoup(html, "html.parser")
-    
+
     # Extract metadata
     metadata = extract_metadata(soup, url)
-    
+
     # Extract main content
     raw_content = _extract_main_content(soup)
     content = clean_text(raw_content)
-    
+
     # Create summary (first paragraph or first 200 chars)
     summary = ""
     if content:
-        paragraphs = content.split('. ')
+        paragraphs = content.split(". ")
         if paragraphs:
             summary = paragraphs[0][:200] + "..." if len(paragraphs[0]) > 200 else paragraphs[0]
-    
+
     return {
         "title": metadata["title"],
         "content": content,
@@ -429,4 +455,4 @@ async def extract_article_content(
         "author": metadata["author"],
         "source": metadata["source"],
         "url": url,
-    } 
+    }
