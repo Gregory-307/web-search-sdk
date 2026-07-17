@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "google_news:article-001",
+  "source": "google_news",
+  "published_at": "2026-07-16T14:30:00Z",
+  "collected_at": "2026-07-16T14:31:00Z",
+  "text": "Bitcoin (BTC) rallies as spot ETF inflows accelerate",
+  "language": "en",
+  "author_id": null,
+  "url": "https://example.com/markets/bitcoin-etf-inflows",
+  "asset_mentions": ["BTC"],
+  "metrics": {"rank": 1},
+  "provenance": {
+    "provider": "google_news",
+    "parser_version": "1.0.0",
+    "query_alias": "btc-market-news",
+    "asset_extraction_version": "1.0.0"
+  },
+  "content_hash": "df6deabfc60ecc9fcee9e01438bf2b03e2ec6b1005941c045db20c6bf6c907cb"
+}
