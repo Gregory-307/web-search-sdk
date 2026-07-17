@@ -1,0 +1,3 @@
+include README.md
+include tests/fixtures/contracts/text_event_web_v1.json
+recursive-include web_search_sdk/resources *.txt
