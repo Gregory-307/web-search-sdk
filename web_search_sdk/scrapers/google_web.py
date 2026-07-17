@@ -1,26 +1,27 @@
-from __future__ import annotations
-
 """Google Web Search scraper (async) – web_search_sdk copy."""
 
+from __future__ import annotations
+
 import asyncio
+import random
+import re
+import urllib.parse as _uparse
 from collections import Counter
 from pathlib import Path
-from typing import List
-import re
 
 import httpx
 from bs4 import BeautifulSoup
-import urllib.parse as _uparse
 
-from .google_web_legacy import top_words_sync as legacy_sync
-from .base import ScraperContext, run_scraper, run_in_thread
-import random
-from ..utils.http import _DEFAULT_UA
-from ..browser import fetch_html as _browser_fetch_html, _SEL_AVAILABLE
 from web_search_sdk.utils.logging import get_logger
+
+from ..browser import _SEL_AVAILABLE
+from ..browser import fetch_html as _browser_fetch_html
+from ..utils.http import _DEFAULT_UA
+from .base import ScraperContext, run_scraper
+
 logger = get_logger("GOOGLE")
 
-__all__ = ["google_web_top_words", "fetch_serp_html"]
+__all__ = ["_SEL_AVAILABLE", "fetch_serp_html", "google_web_top_words"]
 
 SEARCH_URL = "https://www.google.com/search?q={}&hl=en&gl=us&gbv=1&num=100&safe=off&start=0"
 # When we spin up a real browser we can safely drop the `gbv=1` (basic HTML)
@@ -31,24 +32,24 @@ SEARCH_URL_BROWSER = "https://www.google.com/search?q={}&hl=en&gl=us&num=100&saf
 DEFAULT_TOP_N = 20
 TOKEN_RE = re.compile(r"[A-Za-z]{2,}")
 
-_stopwords_path = (
-    Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
-)
+_stopwords_path = Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
 try:
     _STOPWORDS: set[str] = {
-        l.strip().lower() for l in _stopwords_path.read_text(encoding="utf-8").splitlines() if l.strip()
+        line.strip().lower()
+        for line in _stopwords_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
     }
 except FileNotFoundError:
     _STOPWORDS = set()
 
 
-def _tokenise(text: str) -> List[str]:
+def _tokenise(text: str) -> list[str]:
     return TOKEN_RE.findall(text.lower())
 
 
-def _tokenise_and_bigrams(text: str) -> List[str]:
+def _tokenise_and_bigrams(text: str) -> list[str]:
     toks = _tokenise(text)
-    bigrams = [f"{a} {b}" for a, b in zip(toks, toks[1:])]
+    bigrams = [f"{a} {b}" for a, b in zip(toks, toks[1:], strict=False)]
     return toks + bigrams
 
 
@@ -79,7 +80,7 @@ async def _fetch_html(term: str, ctx: ScraperContext) -> str:
             await asyncio.sleep(0.3 * (attempt + 1))
 
 
-def _parse_html(html: str, top_n: int = DEFAULT_TOP_N) -> List[str]:
+def _parse_html(html: str, top_n: int = DEFAULT_TOP_N) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     # Robust extraction – handle both desktop and gbv=1 mobile markups
     titles = [h.get_text(" ").strip() for h in soup.select("div.yuRUbf > a > h3")]
@@ -104,7 +105,7 @@ def _parse_html(html: str, top_n: int = DEFAULT_TOP_N) -> List[str]:
 
 
 def _looks_like_captcha(html: str) -> bool:
-    return ("detected unusual traffic" in html.lower() or "captcha-form" in html.lower())
+    return "detected unusual traffic" in html.lower() or "captcha-form" in html.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -152,10 +153,11 @@ async def fetch_serp_html(term: str, ctx: ScraperContext | None = None) -> str:
             logger.info("browser_fast_path", engine=engine, term=term)
 
         # Choose SERP URL – rich markup for Playwright variants
-        url_builder = lambda t: (
-            SEARCH_URL_BROWSER.format(_uparse.quote(t))
-            if ctx.browser_type.startswith("playwright") else SEARCH_URL.format(_uparse.quote(t))
-        )
+        def url_builder(query: str) -> str:
+            template = (
+                SEARCH_URL_BROWSER if ctx.browser_type.startswith("playwright") else SEARCH_URL
+            )
+            return template.format(_uparse.quote(query))
 
         html = await _browser_fetch_html(term, url_builder, ctx)
         if html:
@@ -183,10 +185,11 @@ async def fetch_serp_html(term: str, ctx: ScraperContext | None = None) -> str:
             logger.info("browser_fallback", term=term)
 
         # Use the richer SERP layout when we have JS rendering
-        url_builder = lambda t: (
-            SEARCH_URL_BROWSER.format(_uparse.quote(t))
-            if ctx.browser_type.startswith("playwright") else SEARCH_URL.format(_uparse.quote(t))
-        )
+        def url_builder(query: str) -> str:
+            template = (
+                SEARCH_URL_BROWSER if ctx.browser_type.startswith("playwright") else SEARCH_URL
+            )
+            return template.format(_uparse.quote(query))
 
         html = await _browser_fetch_html(term, url_builder, ctx)
         if html:
@@ -206,17 +209,19 @@ async def google_web_top_words(
     term: str,
     ctx: ScraperContext = None,
     top_n: int = DEFAULT_TOP_N,
-) -> List[str]:
+) -> list[str]:
     """Return most common words from Google search results for *term*."""
     if ctx is None:
         ctx = ScraperContext(use_browser=True)  # Google works better with browser context
         print("💡 Using browser context for Google search (more reliable)")
-    
+
     # Validate context
     if not ctx.use_browser:
-        print("⚠️  Warning: google_web_top_words works better with browser context. Consider using ScraperContext(use_browser=True)")
+        print(
+            "⚠️  Warning: google_web_top_words works better with browser context. Consider using ScraperContext(use_browser=True)"
+        )
 
     def _parse_wrapper(html: str, t: str, c: ScraperContext):
         return _parse_html(html, top_n)
 
-    return await run_scraper(term, fetch_serp_html, _parse_wrapper, ctx) 
+    return await run_scraper(term, fetch_serp_html, _parse_wrapper, ctx)

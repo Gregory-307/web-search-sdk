@@ -1,6 +1,3 @@
-from __future__ import annotations
-import warnings
-
 """Legacy Google News HTML scraper.
 Searches the standard news.google.com/search page and extracts headline text.
 
@@ -10,30 +7,34 @@ news.py module instead.
 INTERNAL USE ONLY: Do not import this module in user code.
 """
 
+from __future__ import annotations
+
+import os
+import random
+import re
+import warnings
+from collections import Counter
+from pathlib import Path
+from xml.etree import ElementTree as ET
+
+import requests
+from bs4 import BeautifulSoup
+
+from ..utils.http import _DEFAULT_UA
+
 warnings.warn(
     "news_legacy module is deprecated and will be removed in a future version. "
     "Use the async news module instead.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
-
-from typing import List
-from collections import Counter
-import re
-import requests, os, random
-from bs4 import BeautifulSoup
-from pathlib import Path
-from xml.etree import ElementTree as ET
-from ..utils.http import _DEFAULT_UA
 
 SEARCH_URL = "https://news.google.com/search?q={}&hl=en-US&gl=US&ceid=US:en"
 RSS_URL = "https://news.google.com/rss/search?q={}&hl=en-US&gl=US&ceid=US:en"
 TOKEN_RE = re.compile(r"[A-Za-z]{2,}")
 
 # Load stop-word list -------------------------------------------------------
-_stopwords_path = (
-    Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
-)
+_stopwords_path = Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
 
 try:
     _STOPWORDS: set[str] = {
@@ -45,9 +46,10 @@ except FileNotFoundError:
     _STOPWORDS = set()
 
 
-def _tokenise(text: str) -> List[str]:
+def _tokenise(text: str) -> list[str]:
     """Return lowercase alpha tokens (≥2 chars) from *text*."""
     return TOKEN_RE.findall(text.lower())
+
 
 __all__ = ["top_words_sync"]
 
@@ -57,7 +59,7 @@ def top_words_sync(
     top_n: int = 10,
     headers: dict | None = None,
     timeout: float = 20.0,
-) -> List[str]:
+) -> list[str]:
     """Blocking helper that returns *top_n* most common tokens from Google News.
 
     Strategy: RSS feed first (robust, JS-free).  If that yields no words we fall
@@ -101,4 +103,4 @@ def top_words_sync(
         counter = Counter(tokens)
         return [tok for tok, _ in counter.most_common(top_n)]
     except Exception:
-        return [] 
+        return []

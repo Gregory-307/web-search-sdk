@@ -1,6 +1,3 @@
-from __future__ import annotations
-import warnings
-
 """Legacy Google Web-Search scraper (synchronous).
 (Copied from migration_package for web_search_sdk subset.)
 
@@ -10,46 +7,56 @@ google_web.py module instead.
 INTERNAL USE ONLY: Do not import this module in user code.
 """
 
-warnings.warn(
-    "google_web_legacy module is deprecated and will be removed in a future version. "
-    "Use the async google_web module instead.",
-    DeprecationWarning,
-    stacklevel=2
-)
+from __future__ import annotations
 
-from typing import List
+import os
+import random
+import re
+import warnings
 from collections import Counter
-import os, random, re
 from pathlib import Path
+
 import requests
 from bs4 import BeautifulSoup
 
 from ..utils.http import _DEFAULT_UA
 
+warnings.warn(
+    "google_web_legacy module is deprecated and will be removed in a future version. "
+    "Use the async google_web module instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 SEARCH_URL = "https://www.google.com/search?q={}&hl=en&gl=us&gbv=1&num=100&safe=off&start=0"
 TOKEN_RE = re.compile(r"[A-Za-z]{2,}")
 
-_stopwords_path = (
-    Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
-)
+_stopwords_path = Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
 try:
     _STOPWORDS: set[str] = {
-        l.strip().lower() for l in _stopwords_path.read_text(encoding="utf-8").splitlines() if l.strip()
+        line.strip().lower()
+        for line in _stopwords_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
     }
 except FileNotFoundError:
     _STOPWORDS = set()
 
 __all__ = ["top_words_sync"]
 
-def _tokenise(text: str) -> List[str]:
+
+def _tokenise(text: str) -> list[str]:
     return TOKEN_RE.findall(text.lower())
 
-def _tokenise_and_bigrams(text: str) -> List[str]:
+
+def _tokenise_and_bigrams(text: str) -> list[str]:
     toks = _tokenise(text)
-    bigrams = [f"{a} {b}" for a, b in zip(toks, toks[1:])]
+    bigrams = [f"{a} {b}" for a, b in zip(toks, toks[1:], strict=False)]
     return toks + bigrams
 
-def top_words_sync(term: str, *, top_n: int = 20, headers: dict | None = None, timeout: float = 20.0) -> List[str]:
+
+def top_words_sync(
+    term: str, *, top_n: int = 20, headers: dict | None = None, timeout: float = 20.0
+) -> list[str]:
     url = SEARCH_URL.format(requests.utils.quote(term))
     if os.getenv("DEBUG_SCRAPERS") in {"1", "true", "True"}:
         print(f"[GoogleWeb-Legacy] GET {url}")
@@ -77,4 +84,4 @@ def top_words_sync(term: str, *, top_n: int = 20, headers: dict | None = None, t
     if not tokens:
         return []
     counter = Counter(tokens)
-    return [tok for tok, _ in counter.most_common(top_n)] 
+    return [tok for tok, _ in counter.most_common(top_n)]

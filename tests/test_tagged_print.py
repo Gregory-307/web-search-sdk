@@ -1,8 +1,6 @@
-import asyncio
-import importlib
 import types
+
 import pytest
-from contextlib import asynccontextmanager
 
 from web_search_sdk.scrapers import duckduckgo_web as ddg
 from web_search_sdk.scrapers.base import ScraperContext
@@ -50,4 +48,4 @@ async def test_ddg_logger_tag(monkeypatch):
     # First event is http_get
     tag, data = events[0]
     assert tag == "http_get"
-    assert "url" in data 
+    assert "url" in data

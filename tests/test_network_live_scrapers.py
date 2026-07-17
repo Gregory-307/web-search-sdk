@@ -2,20 +2,26 @@
 
 Checks RelatedWords, Wikipedia and Google News scrapers only.
 """
+
 import socket
+
 import pytest
-import asyncio
 
 from web_search_sdk.scrapers import (
-    related_words as related_scraper,
-    wikipedia_top_words as wiki_scraper,
     google_news_top_words as news_scraper,
 )
-from web_search_sdk.utils.http import _DEFAULT_UA
+from web_search_sdk.scrapers import (
+    related_words as related_scraper,
+)
+from web_search_sdk.scrapers import (
+    wikipedia_top_words as wiki_scraper,
+)
 from web_search_sdk.scrapers.base import ScraperContext
+from web_search_sdk.utils.http import _DEFAULT_UA
+
 from .conftest import show
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.live]
 
 TERMS = ["python", "technology", "dog", "music"]
 WIKI_ARTICLES = [
@@ -77,12 +83,10 @@ async def test_live_scrapers_subset():
 
     overall = all([rel_found, wiki_found, news_found])
     summary = (
-        f"RelatedWords : {rel_found}\n"
-        f"Wikipedia     : {wiki_found}\n"
-        f"Google News   : {news_found}"
+        f"RelatedWords : {rel_found}\nWikipedia     : {wiki_found}\nGoogle News   : {news_found}"
     )
     status = "PASS" if overall else "FAIL"
     show("LIVE", "scrapers subset", "Completed", summary, status=status)
 
     if not overall:
-        pytest.fail("; ".join(reasons) if reasons else "Some sources returned empty data") 
+        pytest.fail("; ".join(reasons) if reasons else "Some sources returned empty data")

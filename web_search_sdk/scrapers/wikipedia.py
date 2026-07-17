@@ -6,21 +6,20 @@ common* tokens (minus stop-words).
 We rely on the project-wide stop-word file stored in
 `migration_package/resources/stopwords.txt`.
 """
+
 from __future__ import annotations
 
 import asyncio
+import random
 import re
 from collections import Counter
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup
 
-from ..resources import stopwords  # runtime import via module created below
-from .wikipedia_legacy import top_words_sync
-
-from .base import ScraperContext, run_scraper, run_in_thread
+from .base import ScraperContext, run_in_thread, run_scraper
 
 __all__ = ["wikipedia_top_words", "wikipedia", "wikipedia_raw"]
 
@@ -32,13 +31,13 @@ DEFAULT_TOP_N = 100
 # Stop-word loader (executed on import)
 # ---------------------------------------------------------------------------
 
-_stopwords_path = (
-    Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
-)
+_stopwords_path = Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
 
 try:
     _STOPWORDS: set[str] = {
-        line.strip().lower() for line in _stopwords_path.read_text(encoding="utf-8").splitlines() if line.strip()
+        line.strip().lower()
+        for line in _stopwords_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
     }
 except FileNotFoundError:
     _STOPWORDS = set()
@@ -47,6 +46,7 @@ except FileNotFoundError:
 # ---------------------------------------------------------------------------
 # Fetch & parse helpers
 # ---------------------------------------------------------------------------
+
 
 async def _fetch_html(term: str, ctx: ScraperContext) -> str:
     headers = ctx.headers.copy()
@@ -60,7 +60,7 @@ async def _fetch_html(term: str, ctx: ScraperContext) -> str:
             # Only send proxies kwarg when a proxy string is provided.
             client_kwargs = {"timeout": ctx.timeout}
             if ctx.proxy:
-                client_kwargs["proxies"] = ctx.proxy
+                client_kwargs["proxy"] = ctx.proxy
 
             async with httpx.AsyncClient(**client_kwargs) as client:
                 resp = await client.get(url, headers=headers, follow_redirects=True)
@@ -72,14 +72,16 @@ async def _fetch_html(term: str, ctx: ScraperContext) -> str:
             await asyncio.sleep(0.5 * (attempt + 1))
 
 
-def _tokenise(text: str) -> List[str]:
+def _tokenise(text: str) -> list[str]:
     # Simple tokeniser: split on non-alphabetic, lowercase.
     return re.findall(r"[A-Za-z]{2,}", text.lower())
 
 
-def _parse_html(raw: str, term: str, ctx: ScraperContext, top_n: int = DEFAULT_TOP_N) -> List[str]:
+def _parse_html(raw: str, term: str, ctx: ScraperContext, top_n: int = DEFAULT_TOP_N) -> list[str]:
     soup = BeautifulSoup(raw, "html.parser")
-    content_div = soup.find("div", {"id": "mw-content-text"}) or soup.find("main", {"id": "content"})
+    content_div = soup.find("div", {"id": "mw-content-text"}) or soup.find(
+        "main", {"id": "content"}
+    )
     if content_div is None:
         return []
 
@@ -91,31 +93,39 @@ def _parse_html(raw: str, term: str, ctx: ScraperContext, top_n: int = DEFAULT_T
     return [tok for tok, _ in counter.most_common(top_n)]
 
 
-def _parse_html_structured(raw: str, term: str, ctx: ScraperContext, top_n: int = DEFAULT_TOP_N) -> Dict[str, Any]:
+def _parse_html_structured(
+    raw: str, term: str, ctx: ScraperContext, top_n: int = DEFAULT_TOP_N
+) -> dict[str, Any]:
     """Parse Wikipedia HTML and return structured data with title, content, links, and top_words."""
     soup = BeautifulSoup(raw, "html.parser")
-    
+
     # Extract title
     title_elem = soup.find("h1", {"id": "firstHeading"}) or soup.find("title")
     title = title_elem.get_text().strip() if title_elem else term
-    
+
     # Extract main content
-    content_div = soup.find("div", {"id": "mw-content-text"}) or soup.find("main", {"id": "content"})
+    content_div = soup.find("div", {"id": "mw-content-text"}) or soup.find(
+        "main", {"id": "content"}
+    )
     if content_div is None:
         return {"title": title, "content": "", "links": [], "top_words": []}
-    
+
     # Extract content text
     content = content_div.get_text(" ").strip()
-    
+
     # Extract internal Wikipedia links
     links = []
     for link in content_div.find_all("a", href=True):
         href = link.get("href", "")
-        if href.startswith("/wiki/") and not href.startswith("/wiki/Special:") and not href.startswith("/wiki/File:"):
+        if (
+            href.startswith("/wiki/")
+            and not href.startswith("/wiki/Special:")
+            and not href.startswith("/wiki/File:")
+        ):
             link_text = link.get_text().strip()
             if link_text:
                 links.append(link_text)
-    
+
     # Extract frequency-based tokens
     tokens = _tokenise(content)
     filtered = [tok for tok in tokens if tok not in _STOPWORDS]
@@ -123,12 +133,12 @@ def _parse_html_structured(raw: str, term: str, ctx: ScraperContext, top_n: int 
         filtered = tokens
     counter = Counter(filtered)
     top_words = [tok for tok, _ in counter.most_common(top_n)]
-    
+
     return {
         "title": title,
         "content": content,
         "links": links[:top_n],  # Limit links to top_n
-        "top_words": top_words
+        "top_words": top_words,
     }
 
 
@@ -136,26 +146,22 @@ def _parse_html_structured(raw: str, term: str, ctx: ScraperContext, top_n: int 
 # Public API
 # ---------------------------------------------------------------------------
 
-async def wikipedia_raw(
-    term: str,
-    ctx: ScraperContext = None
-) -> str:
+
+async def wikipedia_raw(term: str, ctx: ScraperContext = None) -> str:
     """Return raw HTML from Wikipedia page."""
     if ctx is None:
         ctx = ScraperContext(use_browser=False)  # HTTP context works fine for Wikipedia
-    
+
     return await _fetch_html(term, ctx)
 
 
 async def wikipedia(
-    term: str,
-    ctx: ScraperContext = None,
-    top_n: int = DEFAULT_TOP_N
-) -> Dict[str, Any]:
+    term: str, ctx: ScraperContext = None, top_n: int = DEFAULT_TOP_N
+) -> dict[str, Any]:
     """Return structured Wikipedia data with title, content, links, and top_words."""
     if ctx is None:
         ctx = ScraperContext(use_browser=False)  # HTTP context works fine for Wikipedia
-    
+
     def _parse_wrapper(raw: str, t: str, c: ScraperContext):
         return _parse_html_structured(raw, t, c, top_n)
 
@@ -172,12 +178,20 @@ async def wikipedia_top_words(
     term: str,
     ctx: ScraperContext | None = None,
     top_n: int = DEFAULT_TOP_N,
-) -> List[str]:
+) -> list[str]:
     """Return a list of the *top_n* most common words from a Wikipedia article."""
 
     # Attempt legacy Newspaper3k path first
     try:
-        words = await run_in_thread(top_words_sync, term, top_n=top_n, headers=ctx.headers if ctx else None, timeout=ctx.timeout if ctx else 20.0)
+        from .wikipedia_legacy import top_words_sync
+
+        words = await run_in_thread(
+            top_words_sync,
+            term,
+            top_n=top_n,
+            headers=ctx.headers if ctx else None,
+            timeout=ctx.timeout if ctx else 20.0,
+        )
         if ctx and ctx.debug:
             print(f"[Wikipedia-Legacy] {term} -> {len(words)} words")
         if words:
@@ -204,15 +218,16 @@ async def wikipedia_top_words(
     if not words:
         api_url = (
             "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=true"
-            f"&titles={term}&format=json" )
+            f"&titles={term}&format=json"
+        )
         if ctx and ctx.debug:
             print(f"[Wikipedia-API] GET {api_url}")
 
-        import httpx, random
         headers = ctx.headers.copy() if ctx else {}
         ua = ctx.choose_ua() if ctx and hasattr(ctx, "choose_ua") else None
         if not ua:
             from ..utils.http import _DEFAULT_UA
+
             ua = random.choice(_DEFAULT_UA)
         headers["User-Agent"] = ua
 
@@ -233,4 +248,4 @@ async def wikipedia_top_words(
             if ctx and ctx.debug:
                 print(f"[Wikipedia-API] failed {e}")
 
-    return words  # may be empty list if all fallbacks failed 
+    return words  # may be empty list if all fallbacks failed

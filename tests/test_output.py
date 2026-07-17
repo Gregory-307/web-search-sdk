@@ -1,7 +1,7 @@
-import tempfile
-import json
 import csv
-from web_search_sdk.utils.output import to_json, to_csv
+import json
+
+from web_search_sdk.utils.output import to_csv, to_json
 
 
 def test_to_json_append(tmp_path):
@@ -17,4 +17,4 @@ def test_to_csv_append(tmp_path):
     to_csv([{"a": 1, "b": 2}], fp)
     to_csv([{"a": 3, "b": 4}], fp, append=True)
     rows = list(csv.DictReader(fp.open()))
-    assert rows == [{"a": "1", "b": "2"}, {"a": "3", "b": "4"}] 
+    assert rows == [{"a": "1", "b": "2"}, {"a": "3", "b": "4"}]

@@ -6,39 +6,42 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash -e {0}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
+          version: "0.11.29"
           python-version: "3.12"
+          enable-cache: true
 
-      - name: Install dependencies
+      - name: Sync locked test environment
+        run: uv sync --locked --extra test
+
+      - name: Lint supported code
+        run: uv run ruff check web_search_sdk tests smoke_test.py
+
+      - name: Check formatting
+        run: uv run ruff format --check web_search_sdk tests smoke_test.py
+
+      - name: Run offline-default tests
+        run: uv run pytest
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Verify wheel outside the source tree
         run: |
-          pip install --upgrade pip
-          pip install -e .[test,browser]
-          pip install pytest-asyncio structlog pytest-cov
-
-      - name: Run tests
-        run: |
-          pytest --cov=web_search_sdk --cov-report=xml --cov-report=term --cov-fail-under=0 -q
-
-      - name: Execute demo notebook (offline mode)
-        env:
-          OFFLINE_MODE: "1"
-        run: |
-          python scripts/run_demo.py
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-xml
-          path: coverage.xml 
+          wheel_env="$(mktemp -d)"
+          uv venv --python 3.12 "$wheel_env/.venv"
+          uv pip install --python "$wheel_env/.venv/bin/python" --no-deps dist/*.whl
+          cd "$wheel_env"
+          "$wheel_env/.venv/bin/python" -c "import importlib.util, web_search_sdk; assert importlib.util.find_spec('web_search_sdk.browser'); assert importlib.util.find_spec('web_search_sdk.scrapers.news'); print(web_search_sdk.__file__)"

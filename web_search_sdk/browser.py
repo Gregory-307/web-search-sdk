@@ -7,23 +7,25 @@ Public API:
     * _SEL_AVAILABLE – bool flag indicating whether Selenium stack is importable
     * fetch_html(term, url_fn, ctx) – async coroutine returning rendered HTML
 """
+
 from __future__ import annotations
 
-import asyncio
-import random
-from typing import Callable
-import time
 import os
-from web_search_sdk.utils.logging import get_logger
-logger = get_logger("browser")
+import random
+import time
+from collections.abc import Callable
 
 from web_search_sdk.scrapers.base import ScraperContext, run_in_thread
+from web_search_sdk.utils.logging import get_logger
+
+logger = get_logger("browser")
 
 # ---------------------------------------------------------------------------
 # Lazy Playwright import guard (optional dependency)
 # ---------------------------------------------------------------------------
 try:
     import importlib
+
     _pl_mod = importlib.import_module("playwright.async_api")  # type: ignore
     _PW_AVAILABLE = True
 except Exception:  # pragma: no cover – playwright not installed or unavailable
@@ -46,9 +48,9 @@ Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
 # ---------------------------------------------------------------------------
 try:
     from selenium import webdriver  # type: ignore
+    from selenium.webdriver.common.by import By  # type: ignore
     from selenium.webdriver.firefox.options import Options as _FxOptions  # type: ignore
     from selenium.webdriver.firefox.service import Service as _FxService  # type: ignore
-    from selenium.webdriver.common.by import By  # type: ignore
     from selenium.webdriver.support import expected_conditions as EC  # type: ignore
     from selenium.webdriver.support.ui import WebDriverWait  # type: ignore
     from webdriver_manager.firefox import GeckoDriverManager  # type: ignore
@@ -62,6 +64,7 @@ __all__ = ["_SEL_AVAILABLE", "fetch_html"]
 # ---------------------------------------------------------------------------
 # Internal blocking function (runs in a thread)
 # ---------------------------------------------------------------------------
+
 
 def _fetch_sync(term: str, url_fn: Callable[[str], str], ctx: ScraperContext) -> str:
     if not _SEL_AVAILABLE:
@@ -105,9 +108,11 @@ def _fetch_sync(term: str, url_fn: Callable[[str], str], ctx: ScraperContext) ->
         except Exception:
             pass
 
+
 # ---------------------------------------------------------------------------
 # Public async API
 # ---------------------------------------------------------------------------
+
 
 async def fetch_html(term: str, url_fn: Callable[[str], str], ctx: ScraperContext) -> str:
     """Return rendered HTML via the configured headless browser backend.
@@ -147,7 +152,9 @@ async def fetch_html(term: str, url_fn: Callable[[str], str], ctx: ScraperContex
         try:
             async with async_playwright() as p:
                 if ctx.browser_type == "playwright_stealth":
-                    browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+                    browser = await p.chromium.launch(
+                        headless=True, args=["--disable-blink-features=AutomationControlled"]
+                    )
                 else:
                     browser = await p.firefox.launch(headless=True)
                 page = await browser.new_page()
@@ -170,4 +177,4 @@ async def fetch_html(term: str, url_fn: Callable[[str], str], ctx: ScraperContex
 
     # Fallback to Selenium (threaded) for all other cases
     html = await run_in_thread(_fetch_sync, term, url_fn, ctx)
-    return _emit(html, "browser-selenium") 
+    return _emit(html, "browser-selenium")

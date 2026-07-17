@@ -1,8 +1,7 @@
 import asyncio
-import pytest
 
-from web_search_sdk.scrapers.google_web import fetch_serp_html
 from web_search_sdk.scrapers.base import ScraperContext
+from web_search_sdk.scrapers.google_web import fetch_serp_html
 
 
 def test_no_http_when_browser(monkeypatch):
@@ -18,8 +17,10 @@ def test_no_http_when_browser(monkeypatch):
     async def _fake_browser(term, url_fn, ctx):
         return "<html>ok</html>"
 
-    monkeypatch.setattr("web_search_sdk.scrapers.google_web._browser_fetch_html", _fake_browser, raising=True)
+    monkeypatch.setattr(
+        "web_search_sdk.scrapers.google_web._browser_fetch_html", _fake_browser, raising=True
+    )
 
     ctx = ScraperContext(use_browser=True, browser_type="playwright_stealth")
     html = asyncio.run(fetch_serp_html("btc rally", ctx))
-    assert "ok" in html 
+    assert "ok" in html

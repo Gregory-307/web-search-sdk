@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 DuckDuckGo Web Search scraper (async)
 ------------------------------------
@@ -18,29 +16,32 @@ duckduckgo_enhanced.py module instead.
 INTERNAL USE ONLY: Do not import this module in user code.
 """
 
-import warnings
-warnings.warn(
-    "duckduckgo_web module is deprecated and will be removed in a future version. "
-    "Use the enhanced duckduckgo_enhanced module instead.",
-    DeprecationWarning,
-    stacklevel=2
-)
+from __future__ import annotations
 
 import asyncio
+import os
 import random
 import re
+import urllib.parse as _uparse
+import warnings
 from collections import Counter
 from pathlib import Path
-from typing import List
-import urllib.parse as _uparse
-import os
 
 import httpx
 from bs4 import BeautifulSoup
 
-from .base import ScraperContext
-from ..utils.http import _DEFAULT_UA
 from web_search_sdk.utils.logging import get_logger
+
+from ..utils.http import _DEFAULT_UA
+from .base import ScraperContext, run_scraper
+
+warnings.warn(
+    "duckduckgo_web module is deprecated and will be removed in a future version. "
+    "Use the enhanced duckduckgo_enhanced module instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 logger = get_logger("DDG")
 
 __all__ = [
@@ -57,14 +58,12 @@ _DEFAULT_TOP_N = 20
 _TOKEN_RE = re.compile(r"[A-Za-z]{2,}")
 
 # Re-use global stopwords list shared by google_web.py to stay DRY.
-_stopwords_path = (
-    Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
-)
+_stopwords_path = Path(__file__).resolve().parent.parent / "resources" / "stopwords.txt"
 try:
     _STOPWORDS: set[str] = {
-        l.strip().lower()
-        for l in _stopwords_path.read_text(encoding="utf-8").splitlines()
-        if l.strip()
+        line.strip().lower()
+        for line in _stopwords_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
     }
 except FileNotFoundError:
     _STOPWORDS = set()
@@ -74,14 +73,15 @@ except FileNotFoundError:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _tokenise(text: str) -> List[str]:
+
+def _tokenise(text: str) -> list[str]:
     """Return simple word tokens (ASCII letters, length ≥2)."""
     return _TOKEN_RE.findall(text.lower())
 
 
-def _tokenise_and_bigrams(text: str) -> List[str]:
+def _tokenise_and_bigrams(text: str) -> list[str]:
     toks = _tokenise(text)
-    bigrams = [f"{a} {b}" for a, b in zip(toks, toks[1:])]
+    bigrams = [f"{a} {b}" for a, b in zip(toks, toks[1:], strict=False)]
     return toks + bigrams
 
 
@@ -103,7 +103,7 @@ async def _fetch_html(term: str, ctx: ScraperContext) -> str:
         try:
             client_kwargs = {"timeout": ctx.timeout}
             if ctx.proxy:
-                client_kwargs["proxies"] = ctx.proxy
+                client_kwargs["proxy"] = ctx.proxy
 
             async with httpx.AsyncClient(**client_kwargs) as client:
                 resp = await client.get(url, headers=headers, follow_redirects=True)
@@ -117,7 +117,7 @@ async def _fetch_html(term: str, ctx: ScraperContext) -> str:
     return ""  # Should not reach here
 
 
-def _parse_html(html: str, top_n: int = _DEFAULT_TOP_N) -> List[str]:
+def _parse_html(html: str, top_n: int = _DEFAULT_TOP_N) -> list[str]:
     """Extract most frequent words/bigrams from a DDG SERP HTML."""
 
     soup = BeautifulSoup(html, "html.parser")
@@ -133,8 +133,6 @@ def _parse_html(html: str, top_n: int = _DEFAULT_TOP_N) -> List[str]:
 
     titles_nodes = soup.select("a.result__a")
     snippets_nodes = soup.select("a.result__snippet, div.result__snippet")
-    link_nodes = soup.select("a.result__url")
-
     titles = [n.get_text(" ").strip() for n in titles_nodes]
     snippets = [n.get_text(" ").strip() for n in snippets_nodes]
 
@@ -155,7 +153,7 @@ def _parse_html(html: str, top_n: int = _DEFAULT_TOP_N) -> List[str]:
     counter = Counter(tokens)
 
     # Preserve order by frequency but remove duplicates via dict keys.
-    top_tokens: List[str] = []
+    top_tokens: list[str] = []
     for tok, _freq in counter.most_common():
         if tok not in top_tokens:
             top_tokens.append(tok)
@@ -203,17 +201,19 @@ async def duckduckgo_top_words(
     term: str,
     ctx: ScraperContext = None,
     top_n: int = _DEFAULT_TOP_N,
-) -> List[str]:
+) -> list[str]:
     """Return most common words from DuckDuckGo search results for *term*."""
     if ctx is None:
         ctx = ScraperContext(use_browser=False)  # HTTP context works fine for DuckDuckGo
-    
+
     # Validate context
     if ctx.use_browser:
-        print("💡 Tip: duckduckgo_top_words works fine with HTTP context (faster). Browser context is optional.")
+        print(
+            "💡 Tip: duckduckgo_top_words works fine with HTTP context (faster). Browser context is optional."
+        )
 
     def _parse_wrapper(html: str, t: str, c: ScraperContext):
         # _parse_html expects only (html, top_n)
         return _parse_html(html, top_n)
 
-    return await run_scraper(term, _fetch_html, _parse_wrapper, ctx) 
+    return await run_scraper(term, _fetch_html, _parse_wrapper, ctx)

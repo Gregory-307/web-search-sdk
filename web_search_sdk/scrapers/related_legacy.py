@@ -1,6 +1,3 @@
-from __future__ import annotations
-import warnings
-
 """Legacy RelatedWords scraper using simple HTML parsing (synchronous).
 Intentionally preserved from the original code path for cases where the new
 JSON API is blocked.
@@ -11,19 +8,24 @@ related.py module instead.
 INTERNAL USE ONLY: Do not import this module in user code.
 """
 
+from __future__ import annotations
+
+import json
+import os
+import random
+import re
+import warnings
+
+import requests
+
+from ..utils.http import _DEFAULT_UA
+
 warnings.warn(
     "related_legacy module is deprecated and will be removed in a future version. "
     "Use the async related module instead.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
-
-import os, random, json, re
-import requests
-from bs4 import BeautifulSoup
-
-from typing import List
-from ..utils.http import _DEFAULT_UA
 
 HTML_URL = "https://relatedwords.org/relatedto/{}"
 API_URL = "https://relatedwords.org/api/related?term={}&max=50"
@@ -39,13 +41,13 @@ def _ensure_headers(hdrs: dict | None) -> dict:
     return hdrs
 
 
-def related_words_sync(term: str, headers: dict | None = None, timeout: float = 20.0) -> List[str]:
+def related_words_sync(term: str, headers: dict | None = None, timeout: float = 20.0) -> list[str]:
     """Return related words using JSON API; fallback to HTML title parse."""
     headers = _ensure_headers(headers)
 
     # 1. Try JSON endpoint --------------------------------------------------
     api_url = API_URL.format(requests.utils.quote(term))
-    if os.getenv("DEBUG_SCRAPERS") in {"1","true","True"}:
+    if os.getenv("DEBUG_SCRAPERS") in {"1", "true", "True"}:
         print(f"[RelatedWords-JSON] GET {api_url}")
 
     try:
@@ -61,7 +63,7 @@ def related_words_sync(term: str, headers: dict | None = None, timeout: float = 
 
     # 2. Fallback: parse <title> from HTML page -----------------------------
     html_url = HTML_URL.format(term.replace(" ", "%20"))
-    if os.getenv("DEBUG_SCRAPERS") in {"1","true","True"}:
+    if os.getenv("DEBUG_SCRAPERS") in {"1", "true", "True"}:
         print(f"[RelatedWords-HTML] GET {html_url}")
 
     resp = requests.get(html_url, headers=headers, timeout=timeout)
@@ -74,4 +76,4 @@ def related_words_sync(term: str, headers: dict | None = None, timeout: float = 
         return [w.strip() for w in part.split() if w.strip()]
 
     # Ultimate fallback: JS-less page; return empty list
-    return [] 
+    return []

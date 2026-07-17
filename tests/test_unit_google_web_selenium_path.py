@@ -1,8 +1,7 @@
 import asyncio
 
-from web_search_sdk.scrapers.google_web import fetch_serp_html
 from web_search_sdk.scrapers.base import ScraperContext
-
+from web_search_sdk.scrapers.google_web import fetch_serp_html
 
 
 def test_fetch_serp_html_selenium_first(monkeypatch):
@@ -20,4 +19,4 @@ def test_fetch_serp_html_selenium_first(monkeypatch):
     ctx = ScraperContext(use_browser=True, browser_type="selenium", debug=False)
 
     html = asyncio.run(fetch_serp_html("btc rally", ctx))
-    assert "<title>stub</title>" in html 
+    assert "<title>stub</title>" in html

@@ -6,17 +6,19 @@ Usage
 >>> to_json(data, "results.json")
 >>> to_csv([{"a":1,"b":2}], "results.csv")
 """
+
 from __future__ import annotations
 
-import json
 import csv
+import json
 from pathlib import Path
-from typing import Any, List, Dict
+from typing import Any
 
 __all__ = [
     "to_json",
     "to_csv",
 ]
+
 
 def _ensure_parent(path: Path) -> None:
     if not path.parent.exists():
@@ -48,7 +50,7 @@ def to_json(data: Any, file_path: str | Path, append: bool = False) -> None:
     path.write_text(json.dumps(to_write, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def to_csv(rows: List[Dict[str, Any]], file_path: str | Path, append: bool = False) -> None:
+def to_csv(rows: list[dict[str, Any]], file_path: str | Path, append: bool = False) -> None:
     """Write list-of-dicts *rows* to CSV at *file_path*.
 
     Fieldnames are inferred from the first row. If *append* is True and the file
@@ -68,4 +70,4 @@ def to_csv(rows: List[Dict[str, Any]], file_path: str | Path, append: bool = Fal
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         if write_header:
             writer.writeheader()
-        writer.writerows(rows) 
+        writer.writerows(rows)

@@ -8,15 +8,21 @@ Goals
 
 All helpers are *functional*; no classes are exposed.
 """
+
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from functools import wraps
-from typing import AsyncIterator, Awaitable, Callable, Dict, List, Optional, TypeVar
-import os
+from typing import TypeVar
+
+import httpx
+
+from .logging import get_logger
 
 T = TypeVar("T")
 
@@ -35,7 +41,9 @@ if OFFLINE_MODE:
         found we fall back to a short placeholder so downstream parsers still
         receive syntactically valid HTML.
         """
-        import pathlib, urllib.parse, textwrap
+        import pathlib
+        import textwrap
+        import urllib.parse
 
         parsed = urllib.parse.urlparse(url)
         fname = f"{parsed.netloc}.html" if parsed.netloc else "fixture.html"
@@ -52,8 +60,6 @@ if OFFLINE_MODE:
             """
         )
 
-import httpx
-from .logging import get_logger
 
 logger = get_logger("utils.http")
 
@@ -76,7 +82,7 @@ async def get_async_client(
     *,
     timeout: float = 20.0,
     proxy: str | None = None,
-    headers: Dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
     ca_file: str | None = None,
 ) -> AsyncIterator[httpx.AsyncClient]:
     """Yield a configured `httpx.AsyncClient`.
@@ -89,7 +95,7 @@ async def get_async_client(
     """
     client = httpx.AsyncClient(
         timeout=timeout,
-        proxies=proxy,
+        proxy=proxy,
         headers=headers,
         follow_redirects=True,
         verify=ca_file or True,
@@ -106,8 +112,8 @@ async def fetch_text(
     retries: int = 2,
     timeout: float = 20.0,
     proxy: str | None = None,
-    headers: Dict[str, str] | None = None,
-    user_agents: List[str] | None = None,
+    headers: dict[str, str] | None = None,
+    user_agents: list[str] | None = None,
     ca_file: str | None = None,
     scraper: str = "http",
 ) -> str:
@@ -130,16 +136,19 @@ async def fetch_text(
     for attempt in range(retries + 1):
         try:
             logger.debug("fetch", url=url, attempt=attempt)
-            async with get_async_client(timeout=timeout, proxy=proxy, headers=headers, ca_file=ca_file) as client:
+            async with get_async_client(
+                timeout=timeout, proxy=proxy, headers=headers, ca_file=ca_file
+            ) as client:
                 start = time.perf_counter()
                 resp = await client.get(url)
                 elapsed_ms = int((time.perf_counter() - start) * 1000)
                 resp.raise_for_status()
                 # Telemetry ---------------------------------------------------
-                if (
-                    os.getenv("LOG_SCRAPERS")
-                    or os.getenv("DEBUG_SCRAPERS") in {"1", "true", "True"}
-                ):
+                if os.getenv("LOG_SCRAPERS") or os.getenv("DEBUG_SCRAPERS") in {
+                    "1",
+                    "true",
+                    "True",
+                }:
                     # Emit two log events: legacy "telemetry" (kept for backward compat)
                     # and an httpx-style "response" event so tests can assert on
                     # `body_len` without relying on the httpx patch when the client
@@ -177,6 +186,7 @@ async def fetch_text(
 # Rate limiting utilities
 # ---------------------------------------------------------------------------
 
+
 def rate_limited(*, calls: int, period: float):
     """Decorator limiting *calls* within *period* seconds per coroutine group.
 
@@ -213,4 +223,4 @@ def rate_limited(*, calls: int, period: float):
 
         return wrapper
 
-    return decorator 
+    return decorator

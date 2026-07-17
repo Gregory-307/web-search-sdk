@@ -22,10 +22,7 @@ REQUIRED_FIELDS = {
 
 def test_golden_web_contract_fixture_is_self_consistent() -> None:
     event = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    canonical = {
-        key: event[key]
-        for key in ("author_id", "published_at", "source", "text", "url")
-    }
+    canonical = {key: event[key] for key in ("author_id", "published_at", "source", "text", "url")}
     content_hash = hashlib.sha256(
         json.dumps(
             canonical,

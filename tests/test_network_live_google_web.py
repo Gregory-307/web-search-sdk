@@ -1,16 +1,19 @@
 """Live smoke test for google_web_top_words.
 Skips automatically if no internet connection.
 """
+
 import socket
+
 import pytest
 
+from web_search_sdk.browser import _SEL_AVAILABLE
 from web_search_sdk.scrapers import google_web_top_words
 from web_search_sdk.scrapers.base import ScraperContext
 from web_search_sdk.utils.http import _DEFAULT_UA
-from .conftest import show
-from web_search_sdk.browser import _SEL_AVAILABLE
 
-pytestmark = pytest.mark.asyncio
+from .conftest import show
+
+pytestmark = [pytest.mark.asyncio, pytest.mark.live]
 
 TERMS = ["python", "beyonce", "openai"]
 
@@ -19,7 +22,9 @@ DEFAULT_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-CTX = ScraperContext(headers=DEFAULT_HEADERS, user_agents=_DEFAULT_UA, use_browser=True, debug=False)
+CTX = ScraperContext(
+    headers=DEFAULT_HEADERS, user_agents=_DEFAULT_UA, use_browser=True, debug=False
+)
 
 
 async def test_live_google_web():
@@ -44,4 +49,4 @@ async def test_live_google_web():
     if not found:
         pytest.xfail("Google blocked request (CAPTCHA page or unusual traffic)")
 
-    assert found, "Live Google Web scraper returned tokens but assertion failed unexpectedly" 
+    assert found, "Live Google Web scraper returned tokens but assertion failed unexpectedly"

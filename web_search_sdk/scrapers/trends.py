@@ -4,10 +4,12 @@ Uses the `pytrends` unofficial API to fetch interest-over-time data for a
 single term. Because pytrends is synchronous, we wrap calls in
 `asyncio.to_thread` so that the public API remains asynchronous.
 """
+
 from __future__ import annotations
 
+import asyncio
 import warnings
-from typing import List, Dict, Any, Callable
+from collections.abc import Callable
 
 import pandas as pd
 from pytrends.request import TrendReq
@@ -20,9 +22,6 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
-print("[DEPRECATED] scrapers.trends – migrate to trends-sdk repo", flush=True)
-
-import asyncio
 
 
 def _interest_over_time_sync(term: str, timeframe: str, geo: str) -> pd.DataFrame:
@@ -40,7 +39,9 @@ async def interest_over_time(
 ) -> pd.DataFrame:
     """Return a pandas DataFrame with Google Trends interest over time."""
     loop = asyncio.get_running_loop()
-    df: pd.DataFrame = await loop.run_in_executor(None, _interest_over_time_sync, term, timeframe, geo)
+    df: pd.DataFrame = await loop.run_in_executor(
+        None, _interest_over_time_sync, term, timeframe, geo
+    )
     return df
 
 
@@ -49,7 +50,7 @@ async def batch_interest_over_time(
     *,
     timeframe: str = "today 12-m",
     geo: str = "",
-    tracker: "Callable[[str, pd.DataFrame | None], None]" = None,
+    tracker: Callable[[str, pd.DataFrame | None], None] = None,
 ) -> dict[str, pd.DataFrame]:
     """Fetch trends for many *terms* sequentially.
 
@@ -71,4 +72,4 @@ async def batch_interest_over_time(
         result[term] = df
         if tracker is not None:
             tracker(term, df if not df.empty else None)
-    return result 
+    return result
